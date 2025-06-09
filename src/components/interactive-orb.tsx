@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
-import { Send, Zap, Edit2, Smile } from 'lucide-react'; 
+import { Send, Zap, Edit2, Smile } from 'lucide-react';
 import html2canvas from 'html2canvas';
 
 import { Input } from '@/components/ui/input';
@@ -11,9 +11,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { generateResponse, type GenerateResponseOutput } from '@/ai/flows/generate-response';
 
-const ORB_SIZE = 90; 
-const INPUT_BUBBLE_WIDTH = 280; 
-const BUBBLE_MARGIN = 12; 
+const ORB_SIZE = 90;
+const INPUT_BUBBLE_WIDTH = 280;
+const BUBBLE_MARGIN = 12;
 const TOP_LEFT_OFFSET = 16;
 
 export function InteractiveOrb() {
@@ -26,38 +26,40 @@ export function InteractiveOrb() {
   const orbControls = useAnimation();
 
   const [clientLoaded, setClientLoaded] = useState(false);
-  
+
   useEffect(() => {
     setClientLoaded(true);
-    const initialOrbPos = {
-      x: window.innerWidth / 2 - ORB_SIZE / 2, 
-      y: window.innerHeight / 2 - ORB_SIZE / 2,
-    };
-    orbControls.set(initialOrbPos);
+    if (typeof window !== 'undefined') {
+      const initialOrbPos = {
+        x: window.innerWidth / 2 - ORB_SIZE / 2,
+        y: window.innerHeight / 2 - ORB_SIZE / 2,
+      };
+      orbControls.set(initialOrbPos);
+    }
   }, [orbControls]);
 
   const handleOrbClick = async () => {
     if (isLoading) return;
 
     if (!isInputVisible) {
-      // Capture screenshot before showing input
       try {
         const canvas = await html2canvas(document.documentElement, {
           useCORS: true,
           logging: false,
-          scale: window.devicePixelRatio > 1 ? 1 : 1, // Adjust scale for performance if needed
-          backgroundColor: null, // Use page background
+          scale: window.devicePixelRatio > 1 ? 1 : 1,
+          backgroundColor: null,
         });
         const dataUri = canvas.toDataURL('image/png');
         setScreenshotDataUri(dataUri);
       } catch (error) {
         console.error("Error capturing screenshot:", error);
-        setScreenshotDataUri(null); 
+        setScreenshotDataUri(null);
       }
     } else {
-      setScreenshotDataUri(null); // Clear screenshot if input is closed without submitting
+      setScreenshotDataUri(null);
     }
     setIsInputVisible(prev => !prev);
+    setAiResponse(null); // Clear previous AI response when toggling input
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -65,19 +67,20 @@ export function InteractiveOrb() {
     if (!inputValue.trim()) return;
 
     setIsLoading(true);
-    setAiResponse(null); 
-    setIsInputVisible(false); 
+    setAiResponse(null);
+    setIsInputVisible(false);
 
     try {
-      const result = await generateResponse({ 
+      const result = await generateResponse({
         prompt: inputValue,
-        screenshotDataUri: screenshotDataUri 
+        screenshotDataUri: screenshotDataUri
       });
       setAiResponse(result);
 
       if (result.response === "Moving to top left.") {
-        orbControls.start({ 
-          x: TOP_LEFT_OFFSET, 
+        console.log("Orb: Attempting to move to top left. Target coordinates:", { x: TOP_LEFT_OFFSET, y: TOP_LEFT_OFFSET });
+        orbControls.start({
+          x: TOP_LEFT_OFFSET,
           y: TOP_LEFT_OFFSET,
           transition: { type: "spring", stiffness: 200, damping: 20 }
         });
@@ -89,24 +92,24 @@ export function InteractiveOrb() {
     } finally {
       setIsLoading(false);
       setInputValue('');
-      setScreenshotDataUri(null); // Clear screenshot after submission
+      setScreenshotDataUri(null);
     }
   };
 
   if (!clientLoaded) {
-    return null; 
+    return null;
   }
 
   return (
-    <div ref={constraintsRef} className="w-full h-full relative overflow-hidden"> 
-      <motion.div 
+    <div ref={constraintsRef} className="w-full h-full relative overflow-hidden">
+      <motion.div
         drag
         dragConstraints={constraintsRef}
         dragMomentum={false}
         className="absolute cursor-grab"
         animate={orbControls}
         transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-        style={{ zIndex: 1000 }} // Ensure orb is on top for interactions
+        style={{ zIndex: 1000 }}
       >
         <AnimatePresence>
           {aiResponse && !isInputVisible && !isLoading && (
@@ -141,7 +144,7 @@ export function InteractiveOrb() {
           ) : isInputVisible ? (
             <Edit2 className="w-7 h-7 text-primary-foreground opacity-60" />
           ) : (
-            <Smile className="w-7 h-7 text-primary-foreground opacity-70" /> 
+            <Smile className="w-7 h-7 text-primary-foreground opacity-70" />
           )}
         </motion.div>
 
