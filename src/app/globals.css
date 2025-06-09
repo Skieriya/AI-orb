@@ -9,6 +9,12 @@ body {
   background-repeat: no-repeat;
   background-position: center center;
   background-attachment: fixed;
+  @apply text-foreground; /* Moved from the layered body style */
+  /* background-color is intentionally omitted here now.
+     If the image specified in background-image doesn't load,
+     the background should default to transparent/white,
+     not the --background color (pale yellow).
+  */
 }
 
 
@@ -101,10 +107,16 @@ body {
   * {
     @apply border-border;
   }
+  /*
+  The body rule that was here:
   body {
-    /* The @apply bg-background here will be overridden by the background-image rule above if the image loads */
     @apply bg-background text-foreground;
   }
+  has been consolidated into the body rule at the top of the file.
+  Specifically, @apply bg-background has been removed to help diagnose
+  if the background image is loading. If the image doesn't load,
+  the background should now be transparent/white instead of pale yellow.
+  */
 }
 
 /* Orb specific styles */
@@ -126,3 +138,5 @@ body {
     background-position: 0% 50%;
   }
 }
+
+    
