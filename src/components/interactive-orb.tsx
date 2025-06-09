@@ -14,7 +14,7 @@ import { generateResponse, type GenerateResponseOutput } from '@/ai/flows/genera
 const ORB_SIZE = 90;
 const INPUT_BUBBLE_WIDTH = 280;
 const BUBBLE_MARGIN = 12;
-const TOP_LEFT_OFFSET = 16;
+const TOP_LEFT_OFFSET = 16; // Used for padding/offset from screen edges
 
 export function InteractiveOrb() {
   const [isInputVisible, setIsInputVisible] = useState(false);
@@ -23,6 +23,7 @@ export function InteractiveOrb() {
   const [isLoading, setIsLoading] = useState(false);
   const constraintsRef = useRef<HTMLDivElement>(null);
   const [screenshotDataUri, setScreenshotDataUri] = useState<string | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const orbControls = useAnimation();
 
   const [clientLoaded, setClientLoaded] = useState(false);
@@ -30,43 +31,42 @@ export function InteractiveOrb() {
   useEffect(() => {
     setClientLoaded(true);
     if (typeof window !== 'undefined') {
-      const initialOrbPos = {
-        x: window.innerWidth / 2 - ORB_SIZE / 2,
-        y: window.innerHeight / 2 - ORB_SIZE / 2,
-      };
-      orbControls.set(initialOrbPos);
+      moveToCenter(); // Initialize orb position to center
     }
-  }, [orbControls]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // orbControls removed as it's stable, moveToCenter uses window
 
   const handleOrbClick = async () => {
     if (isLoading) return;
 
-    if (!isInputVisible) {
+    if (!isInputVisible) { // Orb clicked to show input
       try {
         const canvas = await html2canvas(document.documentElement, {
           useCORS: true,
           logging: false,
-          scale: window.devicePixelRatio > 1 ? 1 : 1,
+          scale: window.devicePixelRatio > 1 ? 1 : 1, 
           backgroundColor: null,
         });
         const dataUri = canvas.toDataURL('image/png');
         setScreenshotDataUri(dataUri);
+        setImageDimensions({ width: canvas.width, height: canvas.height });
       } catch (error) {
         console.error("Error capturing screenshot:", error);
         setScreenshotDataUri(null);
+        setImageDimensions(null);
       }
-    } else {
+    } else { // Orb clicked to hide input (without submitting)
       setScreenshotDataUri(null);
+      setImageDimensions(null);
     }
     setIsInputVisible(prev => !prev);
-    setAiResponse(null); // Clear previous AI response when toggling input
+    setAiResponse(null); 
   };
 
   const moveToCenter = () => {
     if (typeof window !== 'undefined') {
       const centerX = window.innerWidth / 2 - ORB_SIZE / 2;
       const centerY = window.innerHeight / 2 - ORB_SIZE / 2;
-      console.log("Orb: Moving to center. Target coordinates:", { x: centerX, y: centerY });
       orbControls.start({
         x: centerX,
         y: centerY,
@@ -81,34 +81,46 @@ export function InteractiveOrb() {
 
     setIsLoading(true);
     setAiResponse(null);
-    setIsInputVisible(false);
+    setIsInputVisible(false); // Hide input after submission
 
     try {
       const result = await generateResponse({
         prompt: inputValue,
-        screenshotDataUri: screenshotDataUri
+        screenshotDataUri: screenshotDataUri // Pass current screenshot
       });
-      setAiResponse(result);
+      setAiResponse(result); // Display textual response
 
-      if (result.response === "Moving to top left.") {
-        console.log("Orb: Attempting to move to top left. Target coordinates:", { x: TOP_LEFT_OFFSET, y: TOP_LEFT_OFFSET });
+      if (result.x !== undefined && result.y !== undefined && imageDimensions) {
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+
+        let scaledX = result.x * (screenWidth / imageDimensions.width);
+        let scaledY = result.y * (screenHeight / imageDimensions.height);
+        
+        // Clamp coordinates to stay within screen bounds, considering orb size and offset
+        scaledX = Math.max(TOP_LEFT_OFFSET, Math.min(scaledX, screenWidth - ORB_SIZE - TOP_LEFT_OFFSET));
+        scaledY = Math.max(TOP_LEFT_OFFSET, Math.min(scaledY, screenHeight - ORB_SIZE - TOP_LEFT_OFFSET));
+        
+        console.log("Orb: Moving to AI specified coordinates. Target:", { x: scaledX, y: scaledY });
         orbControls.start({
-          x: TOP_LEFT_OFFSET,
-          y: TOP_LEFT_OFFSET,
+          x: scaledX,
+          y: scaledY,
           transition: { type: "spring", stiffness: 200, damping: 20 }
         });
       } else {
+        // If AI doesn't provide coordinates, or screenshot dimensions are missing, move to center.
         moveToCenter();
       }
 
     } catch (error) {
       console.error("AI Error:", error);
       setAiResponse({ response: "Oops! Something went wrong. Please try again." });
-      moveToCenter(); // Move to center on error as well
+      moveToCenter(); 
     } finally {
       setIsLoading(false);
       setInputValue('');
-      setScreenshotDataUri(null);
+      setScreenshotDataUri(null); // Clear screenshot data for next interaction
+      setImageDimensions(null);   // Clear image dimensions
     }
   };
 
@@ -194,3 +206,4 @@ export function InteractiveOrb() {
     </div>
   );
 }
+
