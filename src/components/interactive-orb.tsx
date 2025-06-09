@@ -15,6 +15,7 @@ const ORB_SIZE = 90;
 const INPUT_BUBBLE_WIDTH = 280;
 const BUBBLE_MARGIN = 12;
 const TOP_LEFT_OFFSET = 16; // Used for padding/offset from screen edges
+const SEQUENTIAL_PAUSE_MS = 2000; // Pause between sequential movements
 
 interface ArrowProps {
   x1: number;
@@ -23,16 +24,19 @@ interface ArrowProps {
   y2: number;
 }
 
+interface TargetPoint {
+  x: number;
+  y: number;
+}
+
 function Arrow({ x1, y1, x2, y2 }: ArrowProps) {
   if (x1 === null || y1 === null || x2 === null || y2 === null) return null;
-
-  // Basic check to avoid drawing a zero-length line which might cause issues with marker
   if (x1 === x2 && y1 === y2) return null; 
 
   return (
     <svg
       className="absolute top-0 left-0 w-full h-full pointer-events-none"
-      style={{ zIndex: 999 }} // Ensure arrow is visible but below orb UI if necessary
+      style={{ zIndex: 999 }} 
       aria-hidden="true"
     >
       <defs>
@@ -40,7 +44,7 @@ function Arrow({ x1, y1, x2, y2 }: ArrowProps) {
           id="arrowhead"
           markerWidth="10"
           markerHeight="7"
-          refX="8" // Adjust refX so arrowhead tip is at the line end
+          refX="8" 
           refY="3.5"
           orient="auto"
           markerUnits="strokeWidth"
@@ -54,7 +58,7 @@ function Arrow({ x1, y1, x2, y2 }: ArrowProps) {
         x2={x2}
         y2={y2}
         className="stroke-primary"
-        strokeWidth="2.5" // Increased stroke width
+        strokeWidth="2.5" 
         markerEnd="url(#arrowhead)"
       />
     </svg>
@@ -71,28 +75,49 @@ export function InteractiveOrb() {
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const orbControls = useAnimation();
   const [arrowData, setArrowData] = useState<ArrowProps | null>(null);
-
   const [clientLoaded, setClientLoaded] = useState(false);
+
+  const sequenceActiveRef = useRef(false);
+  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     setClientLoaded(true);
     if (typeof window !== 'undefined') {
       moveToCenter();
     }
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const cancelCurrentSequence = () => {
+    if (sequenceActiveRef.current) {
+      console.log("Cancelling active sequence.");
+      sequenceActiveRef.current = false;
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+        animationTimeoutRef.current = null;
+      }
+      orbControls.stop(); 
+      setArrowData(null); 
+    }
+  };
+
   const handleOrbClick = async () => {
     if (isLoading) return;
-    setArrowData(null); // Clear arrow when orb is clicked
+    cancelCurrentSequence();
+    setArrowData(null);
 
     if (!isInputVisible) {
       try {
         const canvas = await html2canvas(document.documentElement, {
           useCORS: true,
           logging: false,
-          scale: window.devicePixelRatio > 1 ? 1 : 1,
-          backgroundColor: null,
+          scale: window.devicePixelRatio > 1 ? 1 : 1, 
+          backgroundColor: null, 
         });
         const dataUri = canvas.toDataURL('image/png');
         setScreenshotDataUri(dataUri);
@@ -122,13 +147,95 @@ export function InteractiveOrb() {
     }
   };
 
+  const processSequentialTargets = async (
+    orbTargets: TargetPoint[],
+    arrowTargets: TargetPoint[] | undefined,
+    imgDims: { width: number; height: number }
+  ) => {
+    sequenceActiveRef.current = true;
+
+    for (let i = 0; i < orbTargets.length; i++) {
+      if (!sequenceActiveRef.current) {
+        console.log("Sequence processing cancelled before step", i);
+        break;
+      }
+
+      const orbTarget = orbTargets[i];
+      const arrowTarget = arrowTargets && arrowTargets.length > i ? arrowTargets[i] : null;
+
+      let finalOrbX = window.innerWidth / 2 - ORB_SIZE / 2;
+      let finalOrbY = window.innerHeight / 2 - ORB_SIZE / 2;
+      const screenWidth = window.innerWidth;
+      const screenHeight = window.innerHeight;
+
+      let scaledOrbX = orbTarget.x * (screenWidth / imgDims.width);
+      let scaledOrbY = orbTarget.y * (screenHeight / imgDims.height);
+
+      scaledOrbX = Math.max(TOP_LEFT_OFFSET, Math.min(scaledOrbX, screenWidth - ORB_SIZE - TOP_LEFT_OFFSET));
+      scaledOrbY = Math.max(TOP_LEFT_OFFSET, Math.min(scaledOrbY, screenHeight - ORB_SIZE - TOP_LEFT_OFFSET));
+      
+      finalOrbX = scaledOrbX;
+      finalOrbY = scaledOrbY;
+      console.log(`Orb (Step ${i + 1}): Moving to AI specified orbMoveTarget. Target:`, { x: finalOrbX, y: finalOrbY });
+
+      await orbControls.start({
+        x: finalOrbX,
+        y: finalOrbY,
+        transition: { type: "spring", stiffness: 200, damping: 20 }
+      });
+
+      if (!sequenceActiveRef.current) {
+        console.log("Sequence processing cancelled after orb animation at step", i);
+        break;
+      }
+
+      if (arrowTarget) {
+        const scaledArrowX = arrowTarget.x * (screenWidth / imgDims.width);
+        const scaledArrowY = arrowTarget.y * (screenHeight / imgDims.height);
+        
+        console.log(`Arrow (Step ${i + 1}): Targeting AI specified arrowTarget. Orb new center:`, { x: finalOrbX + ORB_SIZE / 2, y: finalOrbY + ORB_SIZE / 2 }, "Arrow tip:", { x: scaledArrowX, y: scaledArrowY });
+        setArrowData({
+          x1: finalOrbX + ORB_SIZE / 2,
+          y1: finalOrbY + ORB_SIZE / 2,
+          x2: scaledArrowX,
+          y2: scaledArrowY,
+        });
+      } else {
+        setArrowData(null);
+      }
+
+      if (i < orbTargets.length - 1) {
+        if (!sequenceActiveRef.current) {
+            console.log("Sequence processing cancelled before pause at step", i);
+            break;
+        }
+        await new Promise(resolve => {
+          if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current);
+          animationTimeoutRef.current = setTimeout(resolve, SEQUENTIAL_PAUSE_MS);
+        });
+        if (!sequenceActiveRef.current) {
+            console.log("Sequence processing cancelled after pause at step", i);
+            break;
+        }
+      }
+    }
+
+    if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current);
+    animationTimeoutRef.current = null;
+    sequenceActiveRef.current = false;
+    console.log("Sequence processing finished.");
+    // Optional: Clear arrow a bit after the sequence ends if desired
+    // setTimeout(() => { if (!sequenceActiveRef.current) setArrowData(null); }, 3000);
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
 
+    cancelCurrentSequence();
     setIsLoading(true);
     setAiResponse(null);
-    setArrowData(null); // Clear arrow on new submission
+    setArrowData(null);
     setIsInputVisible(false);
 
     try {
@@ -138,45 +245,12 @@ export function InteractiveOrb() {
       });
       setAiResponse(result);
 
-      let finalOrbX = window.innerWidth / 2 - ORB_SIZE / 2;
-      let finalOrbY = window.innerHeight / 2 - ORB_SIZE / 2;
-
-      if (result.orbMoveTarget && imageDimensions) {
-        const screenWidth = window.innerWidth;
-        const screenHeight = window.innerHeight;
-
-        let scaledX = result.orbMoveTarget.x * (screenWidth / imageDimensions.width);
-        let scaledY = result.orbMoveTarget.y * (screenHeight / imageDimensions.height);
-
-        scaledX = Math.max(TOP_LEFT_OFFSET, Math.min(scaledX, screenWidth - ORB_SIZE - TOP_LEFT_OFFSET));
-        scaledY = Math.max(TOP_LEFT_OFFSET, Math.min(scaledY, screenHeight - ORB_SIZE - TOP_LEFT_OFFSET));
-        
-        finalOrbX = scaledX;
-        finalOrbY = scaledY;
-        console.log("Orb: Moving to AI specified orbMoveTarget. Target:", { x: finalOrbX, y: finalOrbY });
+      if (result.orbMoveTargets && result.orbMoveTargets.length > 0 && imageDimensions) {
+        await processSequentialTargets(result.orbMoveTargets, result.arrowTargets, imageDimensions);
       } else {
-        console.log("Orb: No orbMoveTarget from AI or no imageDimensions, moving to center.");
-      }
-      
-      orbControls.start({
-        x: finalOrbX,
-        y: finalOrbY,
-        transition: { type: "spring", stiffness: 200, damping: 20 }
-      });
-
-      if (result.arrowTarget && imageDimensions) {
-        const screenWidth = window.innerWidth;
-        const screenHeight = window.innerHeight;
-        const scaledArrowX = result.arrowTarget.x * (screenWidth / imageDimensions.width);
-        const scaledArrowY = result.arrowTarget.y * (screenHeight / imageDimensions.height);
-        
-        console.log("Arrow: Targeting AI specified arrowTarget. Orb new center:", { x: finalOrbX + ORB_SIZE / 2, y: finalOrbY + ORB_SIZE / 2 }, "Arrow tip:", { x: scaledArrowX, y: scaledArrowY });
-        setArrowData({
-          x1: finalOrbX + ORB_SIZE / 2,
-          y1: finalOrbY + ORB_SIZE / 2,
-          x2: scaledArrowX,
-          y2: scaledArrowY,
-        });
+        console.log("Orb: No valid targets from AI or no imageDimensions, moving to center.");
+        moveToCenter();
+        setArrowData(null);
       }
 
     } catch (error) {
@@ -189,6 +263,8 @@ export function InteractiveOrb() {
       setInputValue('');
       setScreenshotDataUri(null); 
       setImageDimensions(null);
+      // If not in a sequence, clear arrow. If sequence just finished, it might still show last arrow.
+      // User clicking orb again will clear it.
     }
   };
 
@@ -201,12 +277,13 @@ export function InteractiveOrb() {
       {arrowData && <Arrow {...arrowData} />}
       <motion.div
         drag
+        onDragStart={cancelCurrentSequence} // Cancel sequence if user starts dragging
         dragConstraints={constraintsRef}
         dragMomentum={false}
         className="absolute cursor-grab"
         animate={orbControls}
         transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-        style={{ zIndex: 1000 }} // Orb on top
+        style={{ zIndex: 1000 }} 
       >
         <AnimatePresence>
           {aiResponse && !isInputVisible && !isLoading && (
@@ -236,7 +313,7 @@ export function InteractiveOrb() {
           whileTap={{ scale: isLoading ? 1.02 : 0.95 }}
           aria-label="AI Orb"
         >
-          {isLoading ? (
+          {isLoading || sequenceActiveRef.current ? ( // Show Zap icon if loading OR sequence active
             <Zap className="w-7 h-7 text-primary-foreground animate-ping" />
           ) : isInputVisible ? (
             <Edit2 className="w-7 h-7 text-primary-foreground opacity-60" />
@@ -246,7 +323,7 @@ export function InteractiveOrb() {
         </motion.div>
 
         <AnimatePresence>
-          {isInputVisible && (
+          {isInputVisible && !sequenceActiveRef.current && ( // Hide input if sequence active
             <motion.form
               onSubmit={handleSubmit}
               initial={{ opacity: 0, y: -20, scale: 0.9 }}
