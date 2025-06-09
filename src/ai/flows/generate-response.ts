@@ -2,10 +2,10 @@
 'use server';
 /**
  * @fileOverview A flow for generating a response from a user prompt, potentially with a screenshot,
- * and enabling coordinate-based movement of an interactive element.
+ * and enabling coordinate-based movement of an interactive element and an arrow pointer.
  *
  * - generateResponse - A function that takes a user prompt and an optional screenshot, then returns an AI-generated response,
- *   potentially including x/y coordinates for movement.
+ *   potentially including x/y coordinates for orb movement and arrow targeting.
  * - GenerateResponseInput - The input type for the generateResponse function.
  * - GenerateResponseOutput - The return type for the generateResponse function.
  */
@@ -21,10 +21,19 @@ const GenerateResponseInputSchema = z.object({
 });
 export type GenerateResponseInput = z.infer<typeof GenerateResponseInputSchema>;
 
+const CoordinateSchema = z.object({
+  x: z.number().describe('The x-coordinate.'),
+  y: z.number().describe('The y-coordinate.'),
+});
+
 const GenerateResponseOutputSchema = z.object({
   response: z.string().describe('The AI-generated textual response.'),
-  x: z.number().optional().describe('The target x-coordinate for orb movement, relative to the screenshot top-left corner.'),
-  y: z.number().optional().describe('The target y-coordinate for orb movement, relative to the screenshot top-left corner.'),
+  orbMoveTarget: CoordinateSchema.optional().describe(
+    "The target top-left x,y coordinates for the orb's movement, relative to the screenshot's top-left (0,0)."
+  ),
+  arrowTarget: CoordinateSchema.optional().describe(
+    "The target x,y coordinates for an arrow to point to, relative to the screenshot's top-left (0,0)."
+  ),
 });
 export type GenerateResponseOutput = z.infer<typeof GenerateResponseOutputSchema>;
 
@@ -36,8 +45,7 @@ const generateResponsePrompt = ai.definePrompt({
   name: 'generateResponsePrompt',
   input: {schema: GenerateResponseInputSchema},
   output: {schema: GenerateResponseOutputSchema},
-  prompt: `You are an interactive AI orb. Respond to the user's prompt.
-If a screenshot is provided, consider its content as part of the user's context.
+  prompt: `You are an interactive AI orb assisting a user on their computer screen. The orb itself is approximately 90x90 pixels.
 
 User Prompt: {{{prompt}}}
 {{#if screenshotDataUri}}
@@ -45,16 +53,52 @@ Current Screen (screenshot):
 {{media url=screenshotDataUri}}
 {{/if}}
 
-Movement Instructions:
-If the user asks you to move the orb (e.g., "move to the center", "put yourself near the bottom right", "drag to 100, 200 pixels", "go to top left"), you should determine the target coordinates based on the screenshot.
-- The 'x' and 'y' coordinates you return should be for the **top-left corner** of where the orb should be placed within the screenshot.
-- (0,0) is the top-left of the screenshot.
-- Example: If the user says 'move to top-left of the screen', you should respond with x: 0, y: 0 and a text confirmation like "Moving to the top left!".
-- Example: If the user says 'move to center of screen' and the screenshot is 1920x1080, you should aim to provide coordinates that would center the orb. Assuming an orb size of roughly 90x90 pixels, the top-left coordinates for centering it would be approximately x: (1920/2 - 90/2) = 870, y: (1080/2 - 90/2) = 495. Provide a text confirmation like "Okay, centering myself."
-- If you determine coordinates, include them in your 'x' and 'y' output fields. Also, provide a textual response confirming the action.
-- If no movement is requested, or if the movement command is too vague to determine coordinates, do not include 'x' and 'y' fields in your output. Just provide a textual response.
+Your Task:
+1.  Analyze the user's prompt in conjunction with the screenshot (if provided).
+2.  If the prompt refers to a specific element, area, or concept visible on the screen (e.g., "What's that button?", "Tell me about the text in the top right", "Can you see the chart?", "Point to the logo"), determine the x, y coordinates of that *element of interest* within the screenshot. These coordinates will be used for an arrow to point at. Output these as \`arrowTarget.x\` and \`arrowTarget.y\`. (0,0) is the top-left of the screenshot.
+3.  Based on the element of interest (if any), decide on new x, y coordinates for the orb *itself* to move to. The orb should generally move to be near the element of interest, but try not to obscure it. The coordinates you provide for \`orbMoveTarget.x\` and \`orbMoveTarget.y\` should be for the *top-left corner* of where the orb should be placed.
+4.  If the user's prompt is a general question not tied to a specific visual element, or if no screenshot is provided, or if the visual reference is too vague to pinpoint, do not output \`arrowTarget\` or \`orbMoveTarget\`.
+5.  Always provide a textual \`response\` to the user's prompt.
 
-For all other prompts, provide a helpful and concise answer.`,
+Coordinate System & Orb Size:
+-   All coordinates you output (\`orbMoveTarget\`, \`arrowTarget\`) MUST be relative to the top-left (0,0) of the provided screenshot.
+-   \`orbMoveTarget.x\` and \`orbMoveTarget.y\` are for the top-left corner of the orb. The orb is roughly 90x90 pixels. Consider this size when deciding where it should move so it doesn't cover the \`arrowTarget\`.
+-   \`arrowTarget.x\` and \`arrowTarget.y\` are for the point the arrow should aim at (e.g., the center of the element of interest).
+
+Example 1 (Visual Query):
+User Prompt: "What is the blue icon near the bottom-left?"
+(Screenshot shows a blue icon whose center is at approximately x:150, y:900 in a 1920x1080 screenshot)
+Expected Output:
+{
+  "response": "That blue icon appears to be the settings shortcut.",
+  "orbMoveTarget": { "x": 100, "y": 800 },
+  "arrowTarget": { "x": 150, "y": 900 }
+}
+
+Example 2 (Direct Orb Movement - if user explicitly asks, but prefer implicit):
+User Prompt: "Move yourself to the very top-left corner of the screen."
+Expected Output:
+{
+  "response": "Okay, moving to the top-left corner!",
+  "orbMoveTarget": { "x": 0, "y": 0 }
+}
+
+Example 3 (General Question):
+User Prompt: "What's the weather like today?"
+Expected Output:
+{
+  "response": "I'm sorry, I don't have access to real-time weather information."
+}
+
+Example 4 (Vague Visual Query):
+User Prompt: "Look at that thing."
+Expected Output:
+{
+  "response": "Could you be more specific about what 'thing' you're referring to on the screen?"
+}
+
+Important: If you decide to provide coordinates, try to be as accurate as possible based on the visual information. If a user asks to move the orb, provide \`orbMoveTarget\`. If they ask about something on screen, provide both \`orbMoveTarget\` (to position orb nearby) and \`arrowTarget\` (to point at the item).
+`,
 });
 
 const generateResponseFlow = ai.defineFlow(
@@ -68,4 +112,3 @@ const generateResponseFlow = ai.defineFlow(
     return output!;
   }
 );
-

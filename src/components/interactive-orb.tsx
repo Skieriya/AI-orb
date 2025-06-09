@@ -16,6 +16,51 @@ const INPUT_BUBBLE_WIDTH = 280;
 const BUBBLE_MARGIN = 12;
 const TOP_LEFT_OFFSET = 16; // Used for padding/offset from screen edges
 
+interface ArrowProps {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+function Arrow({ x1, y1, x2, y2 }: ArrowProps) {
+  if (x1 === null || y1 === null || x2 === null || y2 === null) return null;
+
+  // Basic check to avoid drawing a zero-length line which might cause issues with marker
+  if (x1 === x2 && y1 === y2) return null; 
+
+  return (
+    <svg
+      className="absolute top-0 left-0 w-full h-full pointer-events-none"
+      style={{ zIndex: 999 }} // Ensure arrow is visible but below orb UI if necessary
+      aria-hidden="true"
+    >
+      <defs>
+        <marker
+          id="arrowhead"
+          markerWidth="10"
+          markerHeight="7"
+          refX="8" // Adjust refX so arrowhead tip is at the line end
+          refY="3.5"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <polygon points="0 0, 10 3.5, 0 7" className="fill-primary" />
+        </marker>
+      </defs>
+      <line
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        className="stroke-primary"
+        strokeWidth="2.5" // Increased stroke width
+        markerEnd="url(#arrowhead)"
+      />
+    </svg>
+  );
+}
+
 export function InteractiveOrb() {
   const [isInputVisible, setIsInputVisible] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -25,26 +70,28 @@ export function InteractiveOrb() {
   const [screenshotDataUri, setScreenshotDataUri] = useState<string | null>(null);
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const orbControls = useAnimation();
+  const [arrowData, setArrowData] = useState<ArrowProps | null>(null);
 
   const [clientLoaded, setClientLoaded] = useState(false);
 
   useEffect(() => {
     setClientLoaded(true);
     if (typeof window !== 'undefined') {
-      moveToCenter(); // Initialize orb position to center
+      moveToCenter();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // orbControls removed as it's stable, moveToCenter uses window
+  }, []);
 
   const handleOrbClick = async () => {
     if (isLoading) return;
+    setArrowData(null); // Clear arrow when orb is clicked
 
-    if (!isInputVisible) { // Orb clicked to show input
+    if (!isInputVisible) {
       try {
         const canvas = await html2canvas(document.documentElement, {
           useCORS: true,
           logging: false,
-          scale: window.devicePixelRatio > 1 ? 1 : 1, 
+          scale: window.devicePixelRatio > 1 ? 1 : 1,
           backgroundColor: null,
         });
         const dataUri = canvas.toDataURL('image/png');
@@ -55,12 +102,12 @@ export function InteractiveOrb() {
         setScreenshotDataUri(null);
         setImageDimensions(null);
       }
-    } else { // Orb clicked to hide input (without submitting)
+    } else {
       setScreenshotDataUri(null);
       setImageDimensions(null);
     }
     setIsInputVisible(prev => !prev);
-    setAiResponse(null); 
+    setAiResponse(null);
   };
 
   const moveToCenter = () => {
@@ -81,46 +128,67 @@ export function InteractiveOrb() {
 
     setIsLoading(true);
     setAiResponse(null);
-    setIsInputVisible(false); // Hide input after submission
+    setArrowData(null); // Clear arrow on new submission
+    setIsInputVisible(false);
 
     try {
       const result = await generateResponse({
         prompt: inputValue,
-        screenshotDataUri: screenshotDataUri // Pass current screenshot
+        screenshotDataUri: screenshotDataUri
       });
-      setAiResponse(result); // Display textual response
+      setAiResponse(result);
 
-      if (result.x !== undefined && result.y !== undefined && imageDimensions) {
+      let finalOrbX = window.innerWidth / 2 - ORB_SIZE / 2;
+      let finalOrbY = window.innerHeight / 2 - ORB_SIZE / 2;
+
+      if (result.orbMoveTarget && imageDimensions) {
         const screenWidth = window.innerWidth;
         const screenHeight = window.innerHeight;
 
-        let scaledX = result.x * (screenWidth / imageDimensions.width);
-        let scaledY = result.y * (screenHeight / imageDimensions.height);
-        
-        // Clamp coordinates to stay within screen bounds, considering orb size and offset
+        let scaledX = result.orbMoveTarget.x * (screenWidth / imageDimensions.width);
+        let scaledY = result.orbMoveTarget.y * (screenHeight / imageDimensions.height);
+
         scaledX = Math.max(TOP_LEFT_OFFSET, Math.min(scaledX, screenWidth - ORB_SIZE - TOP_LEFT_OFFSET));
         scaledY = Math.max(TOP_LEFT_OFFSET, Math.min(scaledY, screenHeight - ORB_SIZE - TOP_LEFT_OFFSET));
         
-        console.log("Orb: Moving to AI specified coordinates. Target:", { x: scaledX, y: scaledY });
-        orbControls.start({
-          x: scaledX,
-          y: scaledY,
-          transition: { type: "spring", stiffness: 200, damping: 20 }
-        });
+        finalOrbX = scaledX;
+        finalOrbY = scaledY;
+        console.log("Orb: Moving to AI specified orbMoveTarget. Target:", { x: finalOrbX, y: finalOrbY });
       } else {
-        // If AI doesn't provide coordinates, or screenshot dimensions are missing, move to center.
-        moveToCenter();
+        console.log("Orb: No orbMoveTarget from AI or no imageDimensions, moving to center.");
+      }
+      
+      orbControls.start({
+        x: finalOrbX,
+        y: finalOrbY,
+        transition: { type: "spring", stiffness: 200, damping: 20 }
+      });
+
+      if (result.arrowTarget && imageDimensions) {
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+        const scaledArrowX = result.arrowTarget.x * (screenWidth / imageDimensions.width);
+        const scaledArrowY = result.arrowTarget.y * (screenHeight / imageDimensions.height);
+        
+        console.log("Arrow: Targeting AI specified arrowTarget. Orb new center:", { x: finalOrbX + ORB_SIZE / 2, y: finalOrbY + ORB_SIZE / 2 }, "Arrow tip:", { x: scaledArrowX, y: scaledArrowY });
+        setArrowData({
+          x1: finalOrbX + ORB_SIZE / 2,
+          y1: finalOrbY + ORB_SIZE / 2,
+          x2: scaledArrowX,
+          y2: scaledArrowY,
+        });
       }
 
     } catch (error) {
       console.error("AI Error:", error);
       setAiResponse({ response: "Oops! Something went wrong. Please try again." });
-      moveToCenter(); 
+      moveToCenter();
+      setArrowData(null);
     } finally {
       setIsLoading(false);
       setInputValue('');
-      setScreenshotDataUri(null); // Clear screenshot data for next interaction
-      setImageDimensions(null);   // Clear image dimensions
+      setScreenshotDataUri(null); 
+      setImageDimensions(null);
     }
   };
 
@@ -130,6 +198,7 @@ export function InteractiveOrb() {
 
   return (
     <div ref={constraintsRef} className="w-full h-full relative overflow-hidden">
+      {arrowData && <Arrow {...arrowData} />}
       <motion.div
         drag
         dragConstraints={constraintsRef}
@@ -137,7 +206,7 @@ export function InteractiveOrb() {
         className="absolute cursor-grab"
         animate={orbControls}
         transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-        style={{ zIndex: 1000 }}
+        style={{ zIndex: 1000 }} // Orb on top
       >
         <AnimatePresence>
           {aiResponse && !isInputVisible && !isLoading && (
@@ -206,4 +275,3 @@ export function InteractiveOrb() {
     </div>
   );
 }
-
