@@ -9,12 +9,6 @@ body {
   background-repeat: no-repeat;
   background-position: center center;
   background-attachment: fixed;
-  @apply text-foreground; /* Moved from the layered body style */
-  /* background-color is intentionally omitted here now.
-     If the image specified in background-image doesn't load,
-     the background should default to transparent/white,
-     not the --background color (pale yellow).
-  */
 }
 
 
