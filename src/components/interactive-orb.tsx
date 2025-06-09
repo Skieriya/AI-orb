@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, Send, Zap, Edit2, Smile, CheckCircle } from 'lucide-react'; // Added Smile
+import { Send, Zap, Edit2, Smile } from 'lucide-react'; 
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -108,7 +108,7 @@ export function InteractiveOrb() {
           ) : aiResponse ? (
             <Smile className="w-7 h-7 text-primary-foreground opacity-60" /> 
           ) : (
-            <MessageSquare className="w-7 h-7 text-primary-foreground opacity-70" />
+            <Smile className="w-7 h-7 text-primary-foreground opacity-70" />
           )}
         </motion.div>
 
