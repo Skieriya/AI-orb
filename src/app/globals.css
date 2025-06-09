@@ -4,8 +4,13 @@
 @tailwind utilities;
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  background-image: url('/home/user/studio/image.png');
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-attachment: fixed;
 }
+
 
 @layer base {
   :root {
@@ -97,6 +102,7 @@ body {
     @apply border-border;
   }
   body {
+    /* The @apply bg-background here will be overridden by the background-image rule above if the image loads */
     @apply bg-background text-foreground;
   }
 }
