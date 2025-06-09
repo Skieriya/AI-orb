@@ -1,8 +1,9 @@
+
 "use client";
 
 import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, Send, Zap, Edit2, CheckCircle } from 'lucide-react';
+import { MessageSquare, Send, Zap, Edit2, Smile, CheckCircle } from 'lucide-react'; // Added Smile
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -26,15 +27,15 @@ export function InteractiveOrb() {
   useEffect(() => {
     setClientLoaded(true);
     setInitialOrbPosition({
-      x: window.innerWidth / 2 - ORB_SIZE / 2, // Center of draggable group, orb will be at its 0,0
+      x: window.innerWidth / 2 - ORB_SIZE / 2, 
       y: window.innerHeight / 2 - ORB_SIZE / 2,
     });
   }, []);
 
   const handleOrbClick = () => {
     setIsInputVisible(prev => !prev);
-    if (isInputVisible) { // If we are closing input
-        // setAiResponse(null); // Optionally clear response when opening input
+    if (isInputVisible) { 
+        // setAiResponse(null); 
     }
   };
 
@@ -105,7 +106,7 @@ export function InteractiveOrb() {
           ) : isInputVisible ? (
             <Edit2 className="w-7 h-7 text-primary-foreground opacity-60" />
           ) : aiResponse ? (
-            <CheckCircle className="w-7 h-7 text-primary-foreground opacity-60" />
+            <Smile className="w-7 h-7 text-primary-foreground opacity-60" /> 
           ) : (
             <MessageSquare className="w-7 h-7 text-primary-foreground opacity-70" />
           )}
