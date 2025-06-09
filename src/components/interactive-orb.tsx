@@ -62,6 +62,19 @@ export function InteractiveOrb() {
     setAiResponse(null); // Clear previous AI response when toggling input
   };
 
+  const moveToCenter = () => {
+    if (typeof window !== 'undefined') {
+      const centerX = window.innerWidth / 2 - ORB_SIZE / 2;
+      const centerY = window.innerHeight / 2 - ORB_SIZE / 2;
+      console.log("Orb: Moving to center. Target coordinates:", { x: centerX, y: centerY });
+      orbControls.start({
+        x: centerX,
+        y: centerY,
+        transition: { type: "spring", stiffness: 200, damping: 20 }
+      });
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
@@ -84,11 +97,14 @@ export function InteractiveOrb() {
           y: TOP_LEFT_OFFSET,
           transition: { type: "spring", stiffness: 200, damping: 20 }
         });
+      } else {
+        moveToCenter();
       }
 
     } catch (error) {
       console.error("AI Error:", error);
       setAiResponse({ response: "Oops! Something went wrong. Please try again." });
+      moveToCenter(); // Move to center on error as well
     } finally {
       setIsLoading(false);
       setInputValue('');
