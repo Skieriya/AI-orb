@@ -93,7 +93,7 @@
   }
   body {
     @apply bg-background text-foreground; /* Ensuring themed background and foreground are applied */
-    background-image: url('https://placehold.co/1920x1080.png');
+    background-image: url('/image.png');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
