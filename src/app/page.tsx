@@ -1,14 +1,162 @@
 
 "use client"; // Required for hooks and event handlers
 
+import * as React from 'react';
 import { useState, useEffect, useRef, type FormEvent, useCallback } from 'react';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import { Send, Zap, Edit2, Smile } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { generateResponse, type GenerateResponseOutput } from '@/ai/flows/generate-response';
+import { Slot } from "@radix-ui/react-slot";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "@/lib/utils";
+
+// START: Inlined src/components/ui/button.tsx
+const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        destructive:
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        outline:
+          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+        secondary:
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        ghost: "hover:bg-accent hover:text-accent-foreground",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-10 px-4 py-2",
+        sm: "h-9 rounded-md px-3",
+        lg: "h-11 rounded-md px-8",
+        icon: "h-10 w-10",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+)
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean
+}
+
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button"
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+Button.displayName = "Button"
+// END: Inlined src/components/ui/button.tsx
+
+// START: Inlined src/components/ui/card.tsx
+const Card = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn(
+      "rounded-lg border bg-card text-card-foreground shadow-sm",
+      className
+    )}
+    {...props}
+  />
+))
+Card.displayName = "Card"
+
+const CardHeader = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("flex flex-col space-y-1.5 p-6", className)}
+    {...props}
+  />
+))
+CardHeader.displayName = "CardHeader"
+
+const CardTitle = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn(
+      "text-2xl font-semibold leading-none tracking-tight",
+      className
+    )}
+    {...props}
+  />
+))
+CardTitle.displayName = "CardTitle"
+
+const CardDescription = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("text-sm text-muted-foreground", className)}
+    {...props}
+  />
+))
+CardDescription.displayName = "CardDescription"
+
+const CardContent = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+))
+CardContent.displayName = "CardContent"
+
+const CardFooter = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("flex items-center p-6 pt-0", className)}
+    {...props}
+  />
+))
+CardFooter.displayName = "CardFooter"
+// END: Inlined src/components/ui/card.tsx
+
+// START: Inlined src/components/ui/input.tsx
+const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
+  ({ className, type, ...props }, ref) => {
+    return (
+      <input
+        type={type}
+        className={cn(
+          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+          className
+        )}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+Input.displayName = "Input"
+// END: Inlined src/components/ui/input.tsx
+
 
 const ORB_SIZE = 90;
 const INPUT_BUBBLE_WIDTH = 280;
@@ -95,11 +243,10 @@ function InteractiveOrb() {
 
   useEffect(() => {
     setClientLoaded(true);
-    // Defer the initial move to center to ensure layout is stable
     if (initialMoveTimeoutRef.current) clearTimeout(initialMoveTimeoutRef.current);
     initialMoveTimeoutRef.current = setTimeout(() => {
         moveToCenter();
-    }, 0); // A delay of 0 pushes execution after current stack
+    }, 0); 
 
     return () => {
       if (animationTimeoutRef.current) {
@@ -118,7 +265,7 @@ function InteractiveOrb() {
   const speakText = (text: string) => {
     if (typeof window !== 'undefined' && window.speechSynthesis && text) {
       if (window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel(); // Stop any previous speech
+        window.speechSynthesis.cancel(); 
       }
       const utterance = new SpeechSynthesisUtterance(text);
       window.speechSynthesis.speak(utterance);
@@ -133,7 +280,7 @@ function InteractiveOrb() {
         clearTimeout(animationTimeoutRef.current);
         animationTimeoutRef.current = null;
       }
-      orbControls.stop(); // Stop current orb animation
+      orbControls.stop(); 
       setArrowData(null);
     }
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
@@ -150,8 +297,8 @@ function InteractiveOrb() {
         const canvas = await html2canvas(document.documentElement, {
           useCORS: true,
           logging: false,
-          scale: window.devicePixelRatio > 1 ? 1 : 1, // Adjust scale for higher DPI if needed, but keep it simple for now
-          backgroundColor: null, // Transparent background for screenshot
+          scale: window.devicePixelRatio > 1 ? 1 : 1, 
+          backgroundColor: null, 
         });
         const dataUri = canvas.toDataURL('image/png');
         setScreenshotDataUri(dataUri);
@@ -162,12 +309,11 @@ function InteractiveOrb() {
         setImageDimensions(null);
       }
     } else {
-      // If input is already visible, clicking orb again should hide it and not take screenshot
       setScreenshotDataUri(null);
       setImageDimensions(null);
     }
     setIsInputVisible((prev) => !prev);
-    setAiResponse(null); // Clear previous AI response
+    setAiResponse(null); 
   };
 
   const processSequentialTargets = useCallback(async (
@@ -189,11 +335,9 @@ function InteractiveOrb() {
       const screenWidth = window.innerWidth;
       const screenHeight = window.innerHeight;
 
-      // Scale orb target coordinates from screenshot space to screen space
       let scaledOrbX = orbTarget.x * (screenWidth / imgDims.width);
       let scaledOrbY = orbTarget.y * (screenHeight / imgDims.height);
       
-      // Clamp orb position to stay within screen bounds, accounting for orb size and offset
       scaledOrbX = Math.max(TOP_LEFT_OFFSET, Math.min(scaledOrbX, screenWidth - ORB_SIZE - TOP_LEFT_OFFSET));
       scaledOrbY = Math.max(TOP_LEFT_OFFSET, Math.min(scaledOrbY, screenHeight - ORB_SIZE - TOP_LEFT_OFFSET));
 
@@ -210,23 +354,21 @@ function InteractiveOrb() {
       }
 
       if (arrowTarget) {
-        // Scale arrow target coordinates
         const scaledArrowX = arrowTarget.x * (screenWidth / imgDims.width);
         const scaledArrowY = arrowTarget.y * (screenHeight / imgDims.height);
 
         console.log(`Arrow (Step ${i + 1}/${orbTargets.length}): Targeting AI specified arrowTarget. Original: {x: ${arrowTarget.x}, y: ${arrowTarget.y}}, Scaled Target: {x: ${scaledArrowX}, y: ${scaledArrowY}}. Orb new center for arrow start: {x: ${scaledOrbX + ORB_SIZE / 2}, y: ${scaledOrbY + ORB_SIZE / 2}}`);
         setArrowData({
-          x1: scaledOrbX + ORB_SIZE / 2, // Arrow starts from center of the orb's new position
+          x1: scaledOrbX + ORB_SIZE / 2, 
           y1: scaledOrbY + ORB_SIZE / 2,
           x2: scaledArrowX,
           y2: scaledArrowY,
         });
       } else {
         console.log(`Arrow (Step ${i + 1}/${orbTargets.length}): No arrow target for this step.`);
-        setArrowData(null); // Clear arrow if no target for this step
+        setArrowData(null); 
       }
 
-      // Pause before moving to the next target, if any
       if (i < orbTargets.length - 1) {
         if (!sequenceActiveRef.current) {
           console.log("Sequence processing CANCELLED before pause at step", i + 1);
@@ -237,22 +379,21 @@ function InteractiveOrb() {
           if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current);
           animationTimeoutRef.current = setTimeout(resolve, SEQUENTIAL_PAUSE_MS);
         });
-        if (!sequenceActiveRef.current) { // Check again after pause
+        if (!sequenceActiveRef.current) { 
           console.log("Sequence processing CANCELLED after pause at step", i + 1);
           break;
         }
       }
     }
-    if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current); // Clear any final timeout
+    if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current); 
     animationTimeoutRef.current = null;
 
-    if (sequenceActiveRef.current) { // If sequence was not cancelled
+    if (sequenceActiveRef.current) { 
       sequenceActiveRef.current = false;
       console.log("Sequence processing naturally finished.");
-      speakText(responseToSpeak); // Speak the full response after all movements
+      speakText(responseToSpeak); 
     } else {
       console.log("Sequence processing was terminated early by another action.");
-      // Do not speak if cancelled, or it might speak a partial/irrelevant context
     }
   }, [orbControls, speakText]);
 
@@ -260,32 +401,30 @@ function InteractiveOrb() {
     e.preventDefault();
     if (!inputValue.trim()) return;
     
-    cancelCurrentSequence(); // Cancel any ongoing sequence/speech before starting new one
+    cancelCurrentSequence(); 
     
     setIsLoading(true);
     setAiResponse(null);
-    setArrowData(null); // Clear arrow before new request
-    setIsInputVisible(false); // Hide input bubble while processing
+    setArrowData(null); 
+    setIsInputVisible(false); 
 
     try {
       console.log("Submitting prompt with screenshotDataUri:", screenshotDataUri ? "Present" : "Absent", "imageDimensions:", imageDimensions);
       const result = await generateResponse({
         prompt: inputValue,
-        screenshotDataUri: screenshotDataUri || undefined // Ensure undefined is passed if null
+        screenshotDataUri: screenshotDataUri || undefined 
       });
       console.log("AI Response received:", result);
-      setAiResponse(result); // Store the full AI response
+      setAiResponse(result); 
 
       if (result.orbMoveTargets && result.orbMoveTargets.length > 0 && imageDimensions) {
-        // AI provided targets, and we have screenshot dimensions to scale from
         await processSequentialTargets(result.response, result.orbMoveTargets, result.arrowTargets, imageDimensions);
       } else {
-        // No specific targets from AI, or no screenshot was taken for context
         console.log("Orb: No valid multi-targets from AI, or no imageDimensions, or empty targets array. Moving to center.");
-        moveToCenter(); // Move orb to center
-        setArrowData(null); // Ensure no arrow is shown
+        moveToCenter(); 
+        setArrowData(null); 
         if (result.response) {
-          speakText(result.response); // Speak the response
+          speakText(result.response); 
         }
       }
     } catch (error) {
@@ -297,7 +436,7 @@ function InteractiveOrb() {
       speakText(errorMessage);
     } finally {
       setIsLoading(false);
-      setInputValue(''); // Clear input field
+      setInputValue(''); 
       if (!sequenceActiveRef.current) {
           setScreenshotDataUri(null);
           setImageDimensions(null);
@@ -306,7 +445,7 @@ function InteractiveOrb() {
   };
 
   if (!clientLoaded) {
-    return null; // Don't render until client is loaded to ensure window access
+    return null; 
   }
 
   return (
