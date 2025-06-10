@@ -1,6 +1,6 @@
 
 "use client";
-import { useState, useEffect, useRef, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent, useCallback } from 'react';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import { Send, Zap, Edit2, Smile } from 'lucide-react';
 import html2canvas from 'html2canvas';
@@ -77,20 +77,33 @@ export function InteractiveOrb() {
   const sequenceActiveRef = useRef(false);
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const moveToCenter = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      const centerX = window.innerWidth / 2 - ORB_SIZE / 2;
+      const centerY = window.innerHeight / 2 - ORB_SIZE / 2;
+      console.log("moveToCenter called. Target:", { x: centerX, y: centerY });
+      orbControls.start({
+        x: centerX,
+        y: centerY,
+        transition: { type: "spring", stiffness: 200, damping: 20 }
+      });
+    }
+  }, [orbControls]);
+
   useEffect(() => {
     setClientLoaded(true);
-    if (typeof window !== 'undefined') {
-      moveToCenter();
-    }
+    moveToCenter();
+
     return () => {
       if (animationTimeoutRef.current) {
         clearTimeout(animationTimeoutRef.current);
       }
-      if (window.speechSynthesis && window.speechSynthesis.speaking) {
+      if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
       }
     };
-  }, []);
+  }, [moveToCenter]);
+
 
   const speakText = (text: string) => {
     if (typeof window !== 'undefined' && window.speechSynthesis && text) {
@@ -98,15 +111,11 @@ export function InteractiveOrb() {
         window.speechSynthesis.cancel(); // Stop any previous speech
       }
       const utterance = new SpeechSynthesisUtterance(text);
-      // Optionally configure voice, rate, pitch here
-      // utterance.voice = window.speechSynthesis.getVoices()[0]; // Example: set a specific voice
-      // utterance.rate = 1;
-      // utterance.pitch = 1;
       window.speechSynthesis.speak(utterance);
     }
   };
 
-  const cancelCurrentSequence = () => {
+  const cancelCurrentSequence = useCallback(() => {
     if (sequenceActiveRef.current) {
       console.log("Cancelling active sequence.");
       sequenceActiveRef.current = false;
@@ -120,7 +129,7 @@ export function InteractiveOrb() {
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
     }
-  };
+  }, [orbControls]);
 
   const handleOrbClick = async () => {
     if (isLoading) return;
@@ -150,19 +159,7 @@ export function InteractiveOrb() {
     setAiResponse(null);
   };
 
-  const moveToCenter = () => {
-    if (typeof window !== 'undefined') {
-      const centerX = window.innerWidth / 2 - ORB_SIZE / 2;
-      const centerY = window.innerHeight / 2 - ORB_SIZE / 2;
-      orbControls.start({
-        x: centerX,
-        y: centerY,
-        transition: { type: "spring", stiffness: 200, damping: 20 }
-      });
-    }
-  };
-
-  const processSequentialTargets = async (
+  const processSequentialTargets = useCallback(async (
     responseToSpeak: string,
     orbTargets: TargetPoint[],
     arrowTargets: TargetPoint[] | undefined,
@@ -172,40 +169,41 @@ export function InteractiveOrb() {
     sequenceActiveRef.current = true;
     for (let i = 0; i < orbTargets.length; i++) {
       if (!sequenceActiveRef.current) {
-        console.log("Sequence processing cancelled before step", i);
+        console.log("Sequence processing cancelled before step", i + 1);
         break;
       }
       const orbTarget = orbTargets[i];
       const arrowTarget = arrowTargets && arrowTargets.length > i ? arrowTargets[i] : null;
-      let finalOrbX = window.innerWidth / 2 - ORB_SIZE / 2;
-      let finalOrbY = window.innerHeight / 2 - ORB_SIZE / 2;
+      
       const screenWidth = window.innerWidth;
       const screenHeight = window.innerHeight;
+
       let scaledOrbX = orbTarget.x * (screenWidth / imgDims.width);
       let scaledOrbY = orbTarget.y * (screenHeight / imgDims.height);
+      
       scaledOrbX = Math.max(TOP_LEFT_OFFSET, Math.min(scaledOrbX, screenWidth - ORB_SIZE - TOP_LEFT_OFFSET));
       scaledOrbY = Math.max(TOP_LEFT_OFFSET, Math.min(scaledOrbY, screenHeight - ORB_SIZE - TOP_LEFT_OFFSET));
 
-      finalOrbX = scaledOrbX;
-      finalOrbY = scaledOrbY;
-      console.log(`Orb (Step ${i + 1}/${orbTargets.length}): Moving to AI specified orbMoveTarget. Original: {x: ${orbTarget.x}, y: ${orbTarget.y}}, Scaled & Clamped Target:`, { x: finalOrbX, y: finalOrbY });
+      console.log(`Orb (Step ${i + 1}/${orbTargets.length}): Moving to AI specified orbMoveTarget. Original: {x: ${orbTarget.x}, y: ${orbTarget.y}}, Scaled & Clamped Target:`, { x: scaledOrbX, y: scaledOrbY });
       await orbControls.start({
-        x: finalOrbX,
-        y: finalOrbY,
+        x: scaledOrbX,
+        y: scaledOrbY,
         transition: { type: "spring", stiffness: 200, damping: 20 }
       });
+
       if (!sequenceActiveRef.current) {
-        console.log("Sequence processing cancelled after orb animation at step", i);
+        console.log("Sequence processing cancelled after orb animation at step", i + 1);
         break;
       }
+
       if (arrowTarget) {
         const scaledArrowX = arrowTarget.x * (screenWidth / imgDims.width);
         const scaledArrowY = arrowTarget.y * (screenHeight / imgDims.height);
 
-        console.log(`Arrow (Step ${i + 1}/${orbTargets.length}): Targeting AI specified arrowTarget. Original: {x: ${arrowTarget.x}, y: ${arrowTarget.y}}, Orb new center:`, { x: finalOrbX + ORB_SIZE / 2, y: finalOrbY + ORB_SIZE / 2 }, "Arrow tip:", { x: scaledArrowX, y: scaledArrowY });
+        console.log(`Arrow (Step ${i + 1}/${orbTargets.length}): Targeting AI specified arrowTarget. Original: {x: ${arrowTarget.x}, y: ${arrowTarget.y}}, Orb new center:`, { x: scaledOrbX + ORB_SIZE / 2, y: scaledOrbY + ORB_SIZE / 2 }, "Arrow tip:", { x: scaledArrowX, y: scaledArrowY });
         setArrowData({
-          x1: finalOrbX + ORB_SIZE / 2,
-          y1: finalOrbY + ORB_SIZE / 2,
+          x1: scaledOrbX + ORB_SIZE / 2,
+          y1: scaledOrbY + ORB_SIZE / 2,
           x2: scaledArrowX,
           y2: scaledArrowY,
         });
@@ -213,9 +211,10 @@ export function InteractiveOrb() {
         console.log(`Arrow (Step ${i + 1}/${orbTargets.length}): No arrow target for this step.`);
         setArrowData(null);
       }
+
       if (i < orbTargets.length - 1) {
         if (!sequenceActiveRef.current) {
-          console.log("Sequence processing cancelled before pause at step", i);
+          console.log("Sequence processing cancelled before pause at step", i + 1);
           break;
         }
         console.log(`Sequence (Step ${i + 1}/${orbTargets.length}): Pausing for ${SEQUENTIAL_PAUSE_MS}ms...`);
@@ -224,7 +223,7 @@ export function InteractiveOrb() {
           animationTimeoutRef.current = setTimeout(resolve, SEQUENTIAL_PAUSE_MS);
         });
         if (!sequenceActiveRef.current) {
-          console.log("Sequence processing cancelled after pause at step", i);
+          console.log("Sequence processing cancelled after pause at step", i + 1);
           break;
         }
       }
@@ -239,16 +238,19 @@ export function InteractiveOrb() {
     } else {
       console.log("Sequence processing was terminated early by another action.");
     }
-  };
+  }, [orbControls, speakText]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
+    
     cancelCurrentSequence(); 
+    
     setIsLoading(true);
     setAiResponse(null);
     setArrowData(null);
-    setIsInputVisible(false);
+    setIsInputVisible(false); 
+
     try {
       console.log("Submitting prompt with screenshotDataUri:", screenshotDataUri ? "Present" : "Absent", "imageDimensions:", imageDimensions);
       const result = await generateResponse({
@@ -257,12 +259,13 @@ export function InteractiveOrb() {
       });
       console.log("AI Response received:", result);
       setAiResponse(result);
+
       if (result.orbMoveTargets && result.orbMoveTargets.length > 0 && imageDimensions) {
         await processSequentialTargets(result.response, result.orbMoveTargets, result.arrowTargets, imageDimensions);
       } else {
         console.log("Orb: No valid multi-targets from AI, or no imageDimensions, or empty targets array. Moving to center.");
         moveToCenter();
-        setArrowData(null);
+        setArrowData(null); 
         if (result.response) {
           speakText(result.response);
         }
@@ -277,9 +280,12 @@ export function InteractiveOrb() {
     } finally {
       setIsLoading(false);
       setInputValue('');
+      // Only clear screenshot if a sequence wasn't active (or finished)
+      // If a sequence was cancelled, it might be better to keep the screenshot for a quick retry/follow-up.
+      // For now, we clear it if no sequence is active, implying a full new interaction or completed old one.
       if (!sequenceActiveRef.current) {
-        setScreenshotDataUri(null);
-        setImageDimensions(null);
+          setScreenshotDataUri(null);
+          setImageDimensions(null);
       }
     }
   };
