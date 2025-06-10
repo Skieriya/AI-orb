@@ -3,13 +3,7 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  background-image: url('/image.png');
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-position: center center;
-  background-attachment: fixed;
-}
+/* Removed body background-image styling from here */
 
 
 @layer base {
@@ -101,16 +95,9 @@ body {
   * {
     @apply border-border;
   }
-  /*
-  The body rule that was here:
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground; /* Ensuring themed background and foreground are applied */
   }
-  has been consolidated into the body rule at the top of the file.
-  Specifically, @apply bg-background has been removed to help diagnose
-  if the background image is loading. If the image doesn't load,
-  the background should now be transparent/white instead of pale yellow.
-  */
 }
 
 /* Orb specific styles */
@@ -132,5 +119,3 @@ body {
     background-position: 0% 50%;
   }
 }
-
-    
