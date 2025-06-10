@@ -5,7 +5,7 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100% / 0; /* Transparent white */
+    --background: 0 0% 100%; /* Opaque white */
     --foreground: 291 31% 23%; /* #4A2A4D Dark Purple */
 
     --card: 270 17% 92%; /* #EDEAF0 Lighter lavender for card background */
@@ -52,8 +52,7 @@
   }
 
   .dark {
-    /* Dark theme variables can be defined here if needed, for now keeping them as they were */
-    --background: 0 0% 0% / 0; /* Transparent black for dark mode */
+    --background: 0 0% 0%; /* Opaque black for dark mode */
     --foreground: 0 0% 98%;
     --card: 0 0% 3.9%;
     --card-foreground: 0 0% 98%;
@@ -94,6 +93,11 @@
   }
   body {
     @apply bg-background text-foreground; /* Ensuring themed background and foreground are applied */
+    background-image: url('https://placehold.co/1920x1080.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    min-height: 100vh; /* Ensure body covers viewport height */
   }
 }
 
@@ -116,4 +120,3 @@
     background-position: 0% 50%;
   }
 }
-
